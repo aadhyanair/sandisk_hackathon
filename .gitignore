@@ -1,0 +1,25 @@
+# Local datasets and generated model inputs
+input/*.csv
+data/*.pkl
+
+# Trained models and feature caches
+models/*.pkl
+outputs/cache/
+
+# Generated reports, predictions, figures, and dashboards
+outputs/
+
+# Local execution logs
+*.log
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Editor and OS files
+.vscode/
+.DS_Store
+Thumbs.db
