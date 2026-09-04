@@ -142,15 +142,22 @@ def main():
     block_anom_elig = X_test_b[elig][:, ba_idx]
     ranked = INV.rank_candidates(info_df, block_anom_elig, info_df["zone_severity"].values)
 
-    # Choose dashboard wafers = most interesting (most hidden-risk + zone severity)
+    # Choose dashboard wafers = union of top triage wafers and highest-scoring wafers
     wafer_score = (info_df.assign(hr=(info_df["category"] == "HIDDEN_RISK").astype(int))
                    .groupby("wafer_id")
                    .agg(hidden=("hr", "sum"), sev=("zone_severity", "max"),
                         maxrisk=("prob_b", "max")))
     wafer_score["score"] = wafer_score["hidden"] * 2 + wafer_score["sev"] + wafer_score["maxrisk"]
-    dash_wafers = list(wafer_score.sort_values("score", ascending=False)
-                       .head(args.dashboard_wafers).index)
-    print(f"  Dashboard wafers: {dash_wafers}")
+    
+    triage_wafers = list(ranked.head(args.top_k)["wafer_id"].unique())
+    score_wafers = list(wafer_score.sort_values("score", ascending=False).index)
+    dash_wafers = []
+    for wid in triage_wafers + score_wafers:
+        if wid not in dash_wafers:
+            dash_wafers.append(wid)
+        if len(dash_wafers) >= max(args.dashboard_wafers, 8):
+            break
+    print(f"  Dashboard wafers ({len(dash_wafers)}): {dash_wafers}")
 
     # Background for local attribution = typical eligible die (median of eligible test set)
     background = LX.compute_background(X_test_b[elig])
