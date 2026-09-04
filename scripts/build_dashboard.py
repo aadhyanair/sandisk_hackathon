@@ -2076,6 +2076,11 @@ def build(publish_scratch=None):
     out.write_text(standalone, encoding="utf-8")
     print(f"  Wrote upgraded Apple-Design dashboard: {out} ({len(standalone)//1024} KB)")
 
+    docs_out = ROOT / "docs" / "index.html"
+    docs_out.parent.mkdir(parents=True, exist_ok=True)
+    docs_out.write_text(standalone, encoding="utf-8")
+    print(f"  Wrote GitHub Pages deployment: {docs_out}")
+
     if publish_scratch:
         p = Path(publish_scratch)
         p.write_text(standalone, encoding="utf-8")
