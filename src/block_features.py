@@ -59,10 +59,10 @@ BLOCK_STAT_NAMES = [
 def compute_block_features_df(df):
     n = len(df)
     stats_array = np.zeros((n, len(BLOCK_STAT_NAMES)), dtype=np.float32)
+    block_strings = df["block_readings"].values
 
     for i in range(n):
-        block_str = df.iloc[i]["block_readings"]
-        arr = parse_block_readings(block_str)
+        arr = parse_block_readings(block_strings[i])
         stats_array[i] = compute_block_stats(arr)
 
     return pd.DataFrame(stats_array, columns=BLOCK_STAT_NAMES, index=df.index)
