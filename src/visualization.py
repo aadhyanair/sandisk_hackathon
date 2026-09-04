@@ -76,13 +76,13 @@ def plot_confusion_matrix(metrics, title, path):
 # ------------------------------------------------------------------
 # Pass / fail / new-fail semantic colors (shared across wafer views)
 # ------------------------------------------------------------------
-C_PASS = "#2f9e6b"     # green  - passing die
-C_FAIL = "#cf3646"     # red    - failed die (pre-existing)
-C_NEW = "#e8792b"      # orange - NEW failure (old_label 0 -> label 1)
-C_MISS = "#cf3646"     # red    - missed new failure (FN)
-C_FP = "#7b61c9"       # purple - false positive
-C_TN = "#cfe8dc"       # faint green - true negative
-C_KNOWN = "#8a94a3"    # grey   - pre-test failure / excluded
+C_PASS = "#10b981"     # Emerald green  - passing die
+C_FAIL = "#b91c1c"     # Deep crimson dark red - pre-existing failed die (old_label == 1)
+C_NEW = "#ff7a00"      # Radiant Electric Orange - NEW failure (old_label 0 -> label 1)
+C_MISS = "#ef4444"     # Vivid signal red - missed new failure (FN)
+C_FP = "#0284c7"       # Electric Sky Blue / Azure - false positive (FP) - REPLACED PURPLE
+C_TN = "#e2e8f0"       # Clean Light Slate / Off-white - true negative
+C_KNOWN = "#64748b"    # Cool Slate Grey - pre-test failure / excluded
 
 
 def _wafer_panel(ax, cols, rows, colors, title, xlim, ylim, s):
@@ -136,9 +136,9 @@ def plot_wafer_triptych(wafer_df, title, path):
 
     from matplotlib.patches import Patch
     axes[2].legend(handles=[
-        Patch(color=C_PASS, label="Passing"),
-        Patch(color=C_FAIL, label="Pre-existing fail"),
-        Patch(color=C_NEW, label=f"NEW failure ({int(new_fail.sum())})"),
+        Patch(color=C_PASS, label="Passing (Green)"),
+        Patch(color=C_FAIL, label="Pre-existing fail (Crimson Red)"),
+        Patch(color=C_NEW, label=f"NEW failure ({int(new_fail.sum())}) (Vibrant Orange)"),
     ], loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=3, frameon=False, fontsize=9)
 
     fig.suptitle(title, fontsize=14, fontweight="700")
@@ -180,10 +180,10 @@ def plot_wafer_prediction_diff(wafer_df, pred_col, title, path):
 
     from matplotlib.patches import Patch
     axes[2].legend(handles=[
-        Patch(color=C_NEW, label=f"TP correct ({int(tp.sum())})"),
-        Patch(color=C_MISS, label=f"FN missed ({int(fn.sum())})"),
-        Patch(color=C_FP, label=f"FP false alarm ({int(fp.sum())})"),
-        Patch(color=C_TN, label="TN"),
+        Patch(color=C_NEW, label=f"TP caught fail ({int(tp.sum())}) (Vibrant Orange)"),
+        Patch(color=C_MISS, label=f"FN missed fail ({int(fn.sum())}) (Red)"),
+        Patch(color=C_FP, label=f"FP false alarm ({int(fp.sum())}) (Electric Blue)"),
+        Patch(color=C_TN, label="TN passing"),
     ], loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=4, frameon=False, fontsize=8.5)
 
     fig.suptitle(title, fontsize=14, fontweight="700")
@@ -197,7 +197,7 @@ def plot_wafer_map(wafer_df, prob_col, title, path):
     rows, cols = wafer_df["die_row"].values, wafer_df["die_col"].values
     old_labels = wafer_df["old_label"].values
 
-    colors = np.where(old_labels == 1, "red", "green")
+    colors = np.where(old_labels == 1, C_FAIL, C_PASS)
     axes[0].scatter(cols, rows, c=colors, s=8, marker="s")
     axes[0].set_title("Pre-test (old_label)")
     axes[0].invert_yaxis()
@@ -205,8 +205,8 @@ def plot_wafer_map(wafer_df, prob_col, title, path):
 
     if "label" in wafer_df.columns:
         labels = wafer_df["label"].values
-        c2 = np.where(old_labels == 1, "red",
-                      np.where(labels == 1, "orange", "green"))
+        c2 = np.where(old_labels == 1, C_FAIL,
+                      np.where(labels == 1, C_NEW, C_PASS))
         axes[1].scatter(cols, rows, c=c2, s=8, marker="s")
         axes[1].set_title("Post-test (label)")
         axes[1].invert_yaxis()
@@ -216,9 +216,9 @@ def plot_wafer_map(wafer_df, prob_col, title, path):
         eligible = old_labels == 0
         sc = axes[2].scatter(cols[eligible], rows[eligible],
                              c=wafer_df[prob_col].values[eligible],
-                             cmap="YlOrRd", s=8, marker="s", vmin=0, vmax=1)
+                             cmap="plasma", s=8, marker="s", vmin=0, vmax=1)
         old_fail = old_labels == 1
-        axes[2].scatter(cols[old_fail], rows[old_fail], c="gray", s=8, marker="x", alpha=0.5)
+        axes[2].scatter(cols[old_fail], rows[old_fail], c=C_KNOWN, s=8, marker="x", alpha=0.5)
         axes[2].set_title("Predicted Probability")
         axes[2].invert_yaxis()
         axes[2].set_aspect("equal")

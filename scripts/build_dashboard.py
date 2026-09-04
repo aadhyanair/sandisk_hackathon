@@ -45,24 +45,26 @@ HTML_TEMPLATE = r"""<!doctype html>
       --text-tertiary: #6e7681;
       
       /* Semantic Color Tokens */
-      --accent: #2997ff;
-      --accent-tint: rgba(41, 151, 255, 0.15);
-      --sandisk-red: #ff453a;
-      --sandisk-red-tint: rgba(255, 69, 58, 0.15);
-      --pass: #30d158;
-      --pass-tint: rgba(48, 209, 88, 0.15);
-      --warning: #ffd60a;
-      --warning-tint: rgba(255, 214, 10, 0.15);
-      --critical: #ff453a;
-      --critical-tint: rgba(255, 69, 58, 0.18);
-      --high: #ff9f0a;
-      --medium: #ffd60a;
-      --low: #30d158;
-      --known: #8b949e;
+      --accent: #0a84ff;
+      --accent-tint: rgba(10, 132, 255, 0.15);
+      --sandisk-red: #ef4444;
+      --sandisk-red-tint: rgba(239, 68, 68, 0.15);
+      --pass: #10b981;
+      --pass-tint: rgba(16, 185, 129, 0.15);
+      --warning: #f59e0b;
+      --warning-tint: rgba(245, 158, 11, 0.15);
+      --critical: #ef4444;
+      --critical-tint: rgba(239, 68, 68, 0.18);
+      --high: #ff7a00;
+      --high-tint: rgba(255, 122, 0, 0.18);
+      --medium: #f59e0b;
+      --medium-tint: rgba(245, 158, 11, 0.18);
+      --low: #10b981;
+      --known: #64748b;
       
       /* Driver colors */
-      --pos-driver: #ff9f0a;
-      --neg-driver: #30d158;
+      --pos-driver: #ff7a00;
+      --neg-driver: #10b981;
       
       /* Shadows & Physics */
       --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
@@ -87,21 +89,23 @@ HTML_TEMPLATE = r"""<!doctype html>
       
       --accent: #0071e3;
       --accent-tint: rgba(0, 113, 227, 0.1);
-      --sandisk-red: #d70015;
-      --sandisk-red-tint: rgba(215, 0, 21, 0.1);
-      --pass: #28cd41;
-      --pass-tint: rgba(40, 205, 65, 0.12);
-      --warning: #ff9f0a;
-      --warning-tint: rgba(255, 159, 10, 0.12);
-      --critical: #d70015;
-      --critical-tint: rgba(215, 0, 21, 0.12);
-      --high: #ff9500;
-      --medium: #ffcc00;
-      --low: #28cd41;
-      --known: #8e8e93;
+      --sandisk-red: #dc2626;
+      --sandisk-red-tint: rgba(220, 38, 38, 0.1);
+      --pass: #059669;
+      --pass-tint: rgba(5, 150, 105, 0.12);
+      --warning: #d97706;
+      --warning-tint: rgba(217, 119, 6, 0.12);
+      --critical: #dc2626;
+      --critical-tint: rgba(220, 38, 38, 0.12);
+      --high: #ea580c;
+      --high-tint: rgba(234, 88, 12, 0.15);
+      --medium: #d97706;
+      --medium-tint: rgba(217, 119, 6, 0.15);
+      --low: #059669;
+      --known: #64748b;
       
-      --pos-driver: #ff9500;
-      --neg-driver: #28cd41;
+      --pos-driver: #ea580c;
+      --neg-driver: #059669;
       
       --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
       --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
@@ -1321,9 +1325,9 @@ HTML_TEMPLATE = r"""<!doctype html>
     };
     const BAND_LABELS = {
       low: 'Low Risk (<0.15)',
-      medium: 'Medium (0.15-0.62)',
-      high: 'High Risk (≥0.62)',
-      critical: 'Critical Risk (≥0.50)',
+      medium: 'Medium (0.15-0.35)',
+      high: 'High Risk (0.35-0.62)',
+      critical: 'Critical Risk (≥0.62)',
       known_fail: 'Known Pre-Test Fail'
     };
     const CAT_LABELS = {

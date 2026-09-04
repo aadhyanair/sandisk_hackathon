@@ -247,9 +247,9 @@ def build_dashboard_data(dash_wafers, te_meta, info_df, zones_by_wafer, pos_to_t
     def band(pb, old):
         if old == 1:
             return "known_fail"
-        if pb >= 0.5:
-            return "critical"
         if pb >= tb:
+            return "critical"
+        if pb >= 0.35:
             return "high"
         if pb >= 0.15:
             return "medium"
