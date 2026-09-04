@@ -1,10 +1,10 @@
 """
-Per-die local feature attribution (SHAP-style marginal contributions).
+Per-die model-based single-feature occlusion attribution.
 
-Why not the `shap` library: the final models are HistGradientBoostingClassifier,
-which shap's fast TreeExplainer does not support, and shap's model-agnostic explainer
-is too slow to run over thousands of dies. Instead we use a vectorized single-feature
-occlusion attribution, which is the same additive/marginal idea SHAP formalizes:
+This is NOT the `shap` library and these are NOT SHAP values. The final models are
+HistGradientBoostingClassifier (unsupported by shap's fast TreeExplainer, and shap's
+model-agnostic explainer is too slow over thousands of dies). Instead we compute an exact,
+vectorized single-feature occlusion attribution directly from the model:
 
     contribution_j(x) = p(x) - p(x with feature j reset to a neutral background value)
 

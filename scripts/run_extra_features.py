@@ -5,7 +5,7 @@ Orchestrates the five add-on features on top of the already-trained models:
   2. Multi-Resolution Information Gain Engine
   3. Marginal Failure Detection w/ Focal Loss (ablation; run with --focal)
   4. Spatial Failure Pattern & Risk-Zone Detection
-  5. Engineer Root-Cause & Investigation Engine
+  5. Engineer Investigation & Triage Engine
 
 Reuses the saved models (models/model_a.pkl, model_b.pkl, block_pca.pkl) and the exact
 feature-engineering code from the training pipeline. No model is retrained (except the
@@ -81,6 +81,13 @@ def main():
     ig_summary = IG.summarize(info_df, metrics_a, metrics_b)
     info_df.to_csv(out / "analysis" / "information_gain_per_die.csv", index=False)
     save_json(ig_summary, out / "analysis" / "information_gain_summary.json")
+
+    # hidden_risk.csv: dies Model A cleared but Model B flagged (block data reveals risk).
+    hidden = info_df[info_df["category"] == "HIDDEN_RISK"].copy()
+    hidden = hidden.sort_values("prob_delta", ascending=False)
+    if "label" in hidden.columns:
+        hidden["true_new_failure"] = (hidden["label"] == 1).astype(int)
+    hidden.to_csv(out / "analysis" / "hidden_risk.csv", index=False)
     for c in IG.CATEGORIES:
         print(f"  {c:22s}: {ig_summary['counts'][c]:6d}  ({ig_summary['shares'][c]*100:4.1f}%)")
     if ig_summary["hidden_risk_true_failures"] is not None:
@@ -114,7 +121,18 @@ def main():
             "pattern": z["pattern"], "stats": z["stats"],
             "zones": [{k: v for k, v in zone.items() if k != "cells"} for zone in z["zones"]],
         }
-    save_json(zone_summary, out / "analysis" / "risk_zones.json")
+
+    # Pre-test spatial signatures over the real WM-811K old_label maps.
+    pretest = RZ.classify_pretest_patterns(te_meta)
+    pretest_counts = {}
+    for wid, p in pretest.items():
+        pretest_counts[p["pattern"]] = pretest_counts.get(p["pattern"], 0) + 1
+    print("  Pre-test failure-map signatures: " +
+          ", ".join(f"{k}={v}" for k, v in sorted(pretest_counts.items(), key=lambda x: -x[1])))
+    save_json({"predicted_risk_zones": zone_summary,
+               "pretest_signatures": {str(k): v for k, v in pretest.items()},
+               "pretest_signature_counts": pretest_counts},
+              out / "analysis" / "risk_zones.json")
 
     # ================================================================
     # FEATURE 5: Investigation Engine (+ local attributions)
@@ -165,7 +183,16 @@ def main():
     ranked_topfeats = [pos_to_topfeats.get(p) for p in ranked_pos]
     top_records = INV.build_top_table(ranked, ranked_topfeats, k=args.top_k)
     save_json(top_records, out / "analysis" / "top_dies_to_investigate.json")
-    print(f"  TOP {len(top_records)} dies to investigate saved.")
+
+    # investigation_priority.csv (full ranked list, human-readable)
+    inv_cols = ["wafer_id", "die_row", "die_col", "priority_score", "prob_a", "prob_b",
+                "prob_delta", "category", "zone_severity", "block_anomaly_score"]
+    inv_df = ranked[inv_cols].copy()
+    if "label" in ranked.columns:
+        inv_df["actual_label"] = ranked["label"].values
+    inv_df.insert(0, "rank", range(1, len(inv_df) + 1))
+    inv_df.to_csv(out / "analysis" / "investigation_priority.csv", index=False)
+    print(f"  TOP {len(top_records)} dies to investigate saved (+ investigation_priority.csv).")
     for rec in top_records[:5]:
         lab = "" if rec["actual_label"] is None else f" [actual={rec['actual_label']}]"
         print(f"    #{rec['rank']} {rec['wafer_id']} ({rec['die_row']},{rec['die_col']}) "
@@ -186,18 +213,24 @@ def main():
     # FEATURE 3: Focal-loss ablation (optional)
     # ================================================================
     focal_verdict = None
+    focal_path = out / "analysis" / "focal_ablation.json"
     if args.focal:
         print("\n" + "=" * 60); print("FEATURE 3: Focal-Loss Ablation"); print("=" * 60)
         from src.analysis import focal_ablation as FA
         focal_verdict = FA.run_ablation(cache, metrics_b)
-        save_json(focal_verdict, out / "analysis" / "focal_ablation.json")
+        save_json(focal_verdict, focal_path)
         print(f"  Decision: {focal_verdict['decision']}")
+    elif focal_path.exists():
+        # Reuse a previously-computed ablation so the report keeps its Feature 3 results.
+        with open(focal_path) as f:
+            focal_verdict = json.load(f)
+        print("  (Focal ablation loaded from previous run.)")
 
     # ================================================================
     # Consolidated report
     # ================================================================
     write_report(out, ig_summary, zones_by_wafer, pattern_counts, n_zones_total,
-                 top_records, dash_wafers, focal_verdict, ta, tb)
+                 top_records, dash_wafers, focal_verdict, ta, tb, pretest_counts)
     print("\nAll extra features complete. Report: outputs/reports/extra_features.md")
 
 
@@ -255,7 +288,7 @@ def build_dashboard_data(dash_wafers, te_meta, info_df, zones_by_wafer, pos_to_t
 
 
 def write_report(out, ig, zones_by_wafer, pattern_counts, n_zones_total,
-                 top_records, dash_wafers, focal_verdict, ta, tb):
+                 top_records, dash_wafers, focal_verdict, ta, tb, pretest_counts=None):
     L = []
     L.append("# Extra Features Report\n")
     L.append("Add-on analytics built on top of the trained Model A / Model B, reusing the "
@@ -288,8 +321,12 @@ def write_report(out, ig, zones_by_wafer, pattern_counts, n_zones_total,
     L.append("\n## Feature 4: Spatial Failure Patterns & Risk Zones\n")
     L.append(f"- Total high-risk zones detected: **{n_zones_total}** across {len(zones_by_wafer)} wafers "
              f"(zone = contiguous cluster of dies with Model B risk >= {tb:.2f}).")
-    L.append(f"- Dominant wafer patterns: " +
+    L.append(f"- Dominant predicted-risk patterns: " +
              ", ".join(f"{k} ({v})" for k, v in sorted(pattern_counts.items(), key=lambda x: -x[1])) + "\n")
+    if pretest_counts:
+        L.append(f"- Pre-test failure-map signatures (real WM-811K `old_label` geometry, "
+                 f"candidate process signatures): " +
+                 ", ".join(f"{k} ({v})" for k, v in sorted(pretest_counts.items(), key=lambda x: -x[1])) + "\n")
     # top few zones by severity
     all_zones = []
     for wid, z in zones_by_wafer.items():
@@ -320,7 +357,7 @@ def write_report(out, ig, zones_by_wafer, pattern_counts, n_zones_total,
                  f"{rec['priority_score']:.3f} | {rec['prob_a']:.3f} | {rec['prob_b']:.3f} | "
                  f"{rec['category']} | {lab} |")
     if top_records:
-        L.append("\n**Example root-cause evidence (rank 1):**\n")
+        L.append("\n**Example investigation evidence (rank 1):**\n")
         for line in top_records[0]["evidence"]:
             L.append(f"- {line}")
 
@@ -330,7 +367,7 @@ def write_report(out, ig, zones_by_wafer, pattern_counts, n_zones_total,
              f"`scripts/build_dashboard.py` into the self-contained "
              f"`outputs/dashboard/wafer_dashboard.html`. The dashboard shows die-level risk "
              f"maps with hover stats and click-through explanations (Model A vs B probability, "
-             f"information-gain category, spatial zone, and SHAP-style local feature drivers).\n")
+             f"information-gain category, spatial zone, and occlusion-based local feature drivers).\n")
 
     L.append("\n## Feature 3: Focal-Loss Ablation\n")
     if focal_verdict is None:

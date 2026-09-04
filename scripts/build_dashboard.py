@@ -106,6 +106,14 @@ svg.wafermap{max-width:100%;height:auto;touch-action:none}
 .zone{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--panel-2)}
 .zone .zt{display:flex;justify-content:space-between;font-size:12px}
 .zone .zbar{height:6px;border-radius:3px;background:var(--critical);margin-top:6px;opacity:.85}
+.trip{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:760px){.trip{grid-template-columns:1fr}}
+.trip .cell{display:flex;flex-direction:column;align-items:center;gap:7px}
+.trip .cell h4{margin:0;font-size:12.5px;font-weight:600}
+.trip .cell .cap{font-size:11px;color:var(--ink-soft)}
+.trip svg{max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)}
+.triplegend{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;font-size:11.5px;color:var(--ink-soft);margin-top:12px}
+.story{font-size:12.5px;color:var(--ink-soft);margin:2px 0 14px;text-align:center}
 .foot{margin-top:22px;color:var(--ink-soft);font-size:11.5px;text-align:center;line-height:1.7}
 .themetoggle{cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);
   border-radius:8px;padding:6px 10px;font:inherit;font-size:12px}
@@ -128,6 +136,19 @@ button:focus-visible,.wbtn:focus-visible,.topitem:focus-visible{outline:2px soli
     <div class="legend" id="gainLegend"></div>
     <div class="callout" id="gainCallout"></div>
   </div>
+
+  <section class="panel" style="margin-bottom:18px">
+    <div class="hd"><h3 id="tripTitle">Pre-Test &rarr; Post-Test &rarr; What changed</h3></div>
+    <div class="bd">
+      <p class="story">What was known before test &rarr; what actually happened &rarr; which passing dies became <b style="color:var(--high)">new failures</b>.</p>
+      <div class="trip">
+        <div class="cell"><h4>Pre-Test <span class="cap mono">old_label</span></h4><svg id="tPre" role="img" aria-label="Pre-test wafer"></svg></div>
+        <div class="cell"><h4>Post-Test <span class="cap mono">label</span></h4><svg id="tPost" role="img" aria-label="Post-test wafer"></svg></div>
+        <div class="cell"><h4>Difference <span class="cap">new fails highlighted</span></h4><svg id="tDiff" role="img" aria-label="Difference wafer"></svg></div>
+      </div>
+      <div class="triplegend" id="tripLegend"></div>
+    </div>
+  </section>
 
   <div class="grid">
     <section class="panel">
@@ -227,7 +248,42 @@ const SVGNS='http://www.w3.org/2000/svg';
 function selectWafer(wid){
   curWafer=wid; curDie=null;
   document.querySelectorAll('.wbtn').forEach(b=>b.classList.toggle('active',b.dataset.wid===wid));
-  drawMap(wid); renderWaferInspector(wid);
+  drawTriptych(wid); drawMap(wid); renderWaferInspector(wid);
+}
+const TCOL={pass:'--low',fail:'--critical',newfail:'--high'};
+function drawMini(svg,dies,colorFn){
+  let maxR=0,maxC=0; dies.forEach(d=>{maxR=Math.max(maxR,d.r);maxC=Math.max(maxC,d.c);});
+  const cols=maxC+1,rows=maxR+1,cell=Math.max(3,Math.min(9,Math.floor(300/Math.max(cols,rows))));
+  const gap=Math.max(0.5,cell*0.1),W=cols*cell,H=rows*cell;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.style.width=Math.min(W,300)+'px';
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  const frag=document.createDocumentFragment();
+  dies.forEach(d=>{
+    const r=document.createElementNS(SVGNS,'rect');
+    r.setAttribute('x',d.c*cell); r.setAttribute('y',d.r*cell);
+    r.setAttribute('width',cell-gap); r.setAttribute('height',cell-gap);
+    r.setAttribute('fill',cvar(colorFn(d)));
+    frag.appendChild(r);
+  });
+  svg.appendChild(frag);
+}
+function postState(d){ return (d.old===1)?'fail':((d.y===1)?'fail':'pass'); }
+function drawTriptych(wid){
+  const w=D.wafers[wid], dies=w.dies;
+  document.getElementById('tripTitle').textContent=wid+': Pre-Test → Post-Test → What changed';
+  drawMini(document.getElementById('tPre'), dies, d=>TCOL[d.old===1?'fail':'pass']);
+  drawMini(document.getElementById('tPost'), dies, d=>TCOL[postState(d)]);
+  drawMini(document.getElementById('tDiff'), dies, d=>{
+    if(d.old===1) return TCOL.fail;
+    if(d.y===1) return TCOL.newfail;   // new failure: was passing, now failed
+    return TCOL.pass;
+  });
+  const nNew=dies.filter(d=>d.old===0&&d.y===1).length;
+  const leg=document.getElementById('tripLegend'); leg.innerHTML='';
+  [['Passing','--low'],['Pre-existing fail','--critical'],['NEW failure ('+nNew+')','--high']].forEach(([t,c])=>{
+    const s=el('span'); s.style.display='inline-flex'; s.style.alignItems='center'; s.style.gap='6px';
+    s.innerHTML=`<i class="sw" style="background:${cvar(c)}"></i>${t}`; leg.appendChild(s);
+  });
 }
 function drawMap(wid){
   const w=D.wafers[wid], dies=w.dies;
@@ -323,7 +379,7 @@ function renderDie(wid,d){
   if(d.y!=null){const kv3=el('div','kv'); kv3.innerHTML=`<span class="k">Actual post-test outcome</span><span class="mono">${d.y===1?'FAIL':'pass'}</span>`; b.appendChild(kv3);}
   // local drivers
   if(d.tf&&d.tf.length){
-    const st=el('div','section-title'); st.textContent='Local drivers (SHAP-style contribution to pₙ)'; b.appendChild(st);
+    const st=el('div','section-title'); st.textContent='Local drivers (single-feature occlusion attribution)'; b.appendChild(st);
     const mx=Math.max(...d.tf.map(t=>Math.abs(t[1])))||1;
     d.tf.forEach(([nm,c])=>{
       const w=Math.abs(c)/mx*50;
@@ -375,7 +431,7 @@ document.getElementById('themeToggle').onclick=()=>{
   const sysDark=matchMedia('(prefers-color-scheme:dark)').matches;
   const next=cur? (cur==='dark'?'light':'dark') : (sysDark?'light':'dark');
   r.setAttribute('data-theme',next);
-  if(curWafer){drawMap(curWafer); if(curDie) renderDie(curWafer,curDie); else renderWaferInspector(curWafer);}
+  if(curWafer){drawTriptych(curWafer); drawMap(curWafer); if(curDie) renderDie(curWafer,curDie); else renderWaferInspector(curWafer);}
   // redraw summary swatches
 };
 

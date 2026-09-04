@@ -28,7 +28,8 @@ from src.interpretability import compute_permutation_importance, category_import
 from src.visualization import (
     plot_feature_importance, plot_category_importance, plot_pr_curve,
     plot_confusion_matrix, plot_wafer_map, plot_model_comparison,
-    plot_block_examples_from_arrays, plot_probability_distribution, save_fig
+    plot_block_examples_from_arrays, plot_probability_distribution, save_fig,
+    plot_wafer_triptych, plot_wafer_prediction_diff
 )
 
 
@@ -394,6 +395,22 @@ Adding block-level information changed:
         # Block examples (using pre-extracted arrays)
         plot_block_examples_from_arrays(block_example_passes, block_example_fails,
                                          path=fig_dir / "block_examples.png")
+
+        # Three-panel wafer views (Pre-Test / Post-Test / Difference) + prediction views,
+        # for the wafers with the most NEW failures (old_label==0 & label==1).
+        wv_dir = fig_dir / "wafer_views"
+        wv_dir.mkdir(parents=True, exist_ok=True)
+        test_df_viz["new_fail"] = ((test_df_viz["old_label"] == 0) & (test_df_viz["label"] == 1)).astype(int)
+        top_newfail = (test_df_viz.groupby("wafer_id")["new_fail"].sum()
+                       .sort_values(ascending=False).head(4).index)
+        for wid in top_newfail:
+            wdf = test_df_viz[test_df_viz["wafer_id"] == wid]
+            nnew = int(wdf["new_fail"].sum())
+            plot_wafer_triptych(wdf, f"Wafer {wid}  -  {nnew} new failures",
+                                wv_dir / f"wafer_{wid}_triptych.png")
+            plot_wafer_prediction_diff(wdf, "pred_b",
+                                       f"Wafer {wid}  -  Model B prediction vs actual",
+                                       wv_dir / f"wafer_{wid}_prediction.png")
 
         print("  Figures saved.")
 

@@ -26,7 +26,7 @@ Outputs land in `outputs/analysis/`, `outputs/dashboard/`, and `outputs/reports/
 ```
 src/analysis/
     feature_cache.py     # rebuild + cache Model A/B matrices from saved block PCA (no retrain)
-    local_explain.py     # per-die SHAP-style local attribution (single-feature occlusion)
+    local_explain.py     # per-die model-based single-feature occlusion attribution
     info_gain.py         # Feature 2: per-die A-vs-B categorisation + summary
     risk_zones.py        # Feature 4: connected-component zones + pattern classification
     investigation.py     # Feature 5: priority ranking + evidence generation
@@ -49,7 +49,7 @@ A fab-operator console: pick a wafer, see every die coloured by Model B risk ban
 (critical / high / medium / low / known-fail), hover for quick stats, and click a die to
 open its full explanation — Model A vs Model B probability bars (with each model's decision
 threshold marked), its information-gain category, the spatial zone it belongs to, and its
-**SHAP-style local drivers** as diverging bars (which features pushed failure probability up
+**occlusion-based local drivers** as diverging bars (which features pushed failure probability up
 vs a typical passing die). A global "top dies to investigate" list threads
 wafer → risk zone → die. Data for the four most informative wafers is embedded inline
 (the artifact CSP blocks fetching local files).
@@ -89,7 +89,7 @@ clustered / isolated** — using radial position, ring concentration, and PCA el
 zone also reports its **hidden-risk share**, linking back to Feature 2: a high share means
 that region's danger is visible mainly because of block-level data.
 
-## Feature 5 — Engineer Root-Cause & Investigation Engine
+## Feature 5 — Engineer Investigation & Triage Engine
 `src/analysis/investigation.py` → `outputs/analysis/top_dies_to_investigate.json`.
 
 Ranks eligible dies by an investigation-priority score fusing five real signals —
@@ -97,7 +97,7 @@ predicted risk (0.40), information gain (0.20), sub-die block anomaly (0.20) and
 severity (0.20), with the strongest local attribution surfaced as supporting evidence. The
 "TOP DIES TO INVESTIGATE" records carry evidence lines generated from the actual computed
 values (probabilities, category, zone severity, block anomaly score, top local drivers), so
-an engineer can move systematically from wafer → risk zone → high-risk die → likely cause.
+an engineer can move systematically from wafer → risk zone → high-risk die → candidate process signature.
 
 ---
 

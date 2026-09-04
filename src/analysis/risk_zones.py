@@ -13,7 +13,7 @@ All quantities are computed from real predicted probabilities and real die coord
 import numpy as np
 from scipy import ndimage
 
-PATTERNS = ["center", "edge", "radial", "linear", "clustered", "isolated"]
+PATTERNS = ["center", "edge", "radial", "scratch", "linear", "clustered", "isolated"]
 
 
 def _classify_pattern(rows, cols, max_r, max_c):
@@ -27,15 +27,17 @@ def _classify_pattern(rows, cols, max_r, max_c):
     mean_radial = float(radial.mean())
     std_radial = float(radial.std())
 
-    # Elongation via PCA of coordinates (linear streak detection).
+    # Elongation + minor-axis width via PCA of coordinates (streak detection).
     pts = np.column_stack([rows, cols]).astype(np.float64)
     elong = 0.0
+    minor_width = float("inf")
     if n >= 3:
         c = pts - pts.mean(axis=0)
         cov = np.cov(c.T)
         ev = np.sort(np.linalg.eigvalsh(cov))[::-1]
         if ev[0] > 1e-9:
             elong = float(1.0 - ev[1] / ev[0])  # ~1 => line, ~0 => blob
+        minor_width = float(np.sqrt(max(ev[1], 0.0)))  # spread across the streak
 
     # Number of separate compact clusters among the high-risk dies.
     n_clusters = _count_clusters(rows, cols, max_r, max_c)
@@ -44,13 +46,17 @@ def _classify_pattern(rows, cols, max_r, max_c):
     avg_cluster_size = n / n_clusters if n_clusters else n
     stats = {
         "mean_radial": mean_radial, "std_radial": std_radial,
-        "elongation": elong, "n_clusters": int(n_clusters), "n_high_risk": int(n),
+        "elongation": elong, "minor_width": minor_width,
+        "n_clusters": int(n_clusters), "n_high_risk": int(n),
         "avg_cluster_size": float(avg_cluster_size),
     }
 
     # Judge global geometry first; fall back to clustered/isolated by contiguity.
     if n <= 2:
         return "isolated", stats
+    # Scratch = a long, THIN, contiguous streak (classic wafer-scratch signature).
+    if elong > 0.90 and minor_width < 1.5 and n >= 5 and avg_cluster_size >= 2.0:
+        return "scratch", stats
     if elong > 0.82 and n >= 4:
         return "linear", stats
     if mean_radial < 0.33:
@@ -127,6 +133,25 @@ def detect_wafer_zones(wafer_meta, prob_b, threshold, info_gain_cat=None, min_zo
     pattern, stats = _classify_pattern(hr_rows, hr_cols, max_r, max_c)
     stats["n_singleton_dies"] = int(n_singletons)
     return zones, pattern, stats
+
+
+def classify_pretest_patterns(meta):
+    """
+    Classify each wafer's PRE-TEST failure geometry (old_label==1 dies) into a spatial
+    signature. These are the real WM-811K defect maps, so this surfaces genuine
+    center / edge / radial (ring) / scratch / linear / clustered signatures. Framed as
+    candidate process signatures, not proven physical causes.
+    """
+    out = {}
+    for wid, g in meta.groupby("wafer_id"):
+        fails = g[g["old_label"] == 1]
+        rows = fails["die_row"].values
+        cols = fails["die_col"].values
+        max_r = int(g["die_row"].max()) + 1
+        max_c = int(g["die_col"].max()) + 1
+        pattern, stats = _classify_pattern(rows, cols, max_r, max_c)
+        out[wid] = {"pattern": pattern, "n_pretest_fails": int(len(fails)), "stats": stats}
+    return out
 
 
 def detect_all(info_df, threshold):

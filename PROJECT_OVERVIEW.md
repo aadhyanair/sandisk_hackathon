@@ -268,7 +268,7 @@ detached background process during development for exactly this reason.
 
 On top of the two core models, five add-on capabilities were built — an interactive XAI
 wafer dashboard, a multi-resolution information-gain engine, a focal-loss ablation, spatial
-risk-zone detection, and an engineer investigation/root-cause engine. They reuse the saved
+risk-zone detection, and an engineer investigation/triage engine. They reuse the saved
 models and the same feature pipeline (no retraining, except the isolated focal ablation).
 See **[EXTRA_FEATURES.md](EXTRA_FEATURES.md)** for design and usage, and
 `outputs/reports/extra_features.md` for results. Run them with:

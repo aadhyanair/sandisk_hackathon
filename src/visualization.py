@@ -73,6 +73,124 @@ def plot_confusion_matrix(metrics, title, path):
     save_fig(fig, path)
 
 
+# ------------------------------------------------------------------
+# Pass / fail / new-fail semantic colors (shared across wafer views)
+# ------------------------------------------------------------------
+C_PASS = "#2f9e6b"     # green  - passing die
+C_FAIL = "#cf3646"     # red    - failed die (pre-existing)
+C_NEW = "#e8792b"      # orange - NEW failure (old_label 0 -> label 1)
+C_MISS = "#cf3646"     # red    - missed new failure (FN)
+C_FP = "#7b61c9"       # purple - false positive
+C_TN = "#cfe8dc"       # faint green - true negative
+C_KNOWN = "#8a94a3"    # grey   - pre-test failure / excluded
+
+
+def _wafer_panel(ax, cols, rows, colors, title, xlim, ylim, s):
+    ax.scatter(cols, rows, c=colors, s=s, marker="s", linewidths=0)
+    ax.set_title(title, fontsize=12, fontweight="600")
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.invert_yaxis()
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#c2ccd6")
+
+
+def _panel_geometry(rows, cols):
+    """Shared limits + marker size so all panels are visually comparable."""
+    pad = 1.0
+    span = max(cols.max() - cols.min(), rows.max() - rows.min()) + 1
+    s = max(6, min(90, int(9000 / max(span, 1))))
+    return (cols.min() - pad, cols.max() + pad), (rows.min() - pad, rows.max() + pad), s
+
+
+def plot_wafer_triptych(wafer_df, title, path):
+    """
+    Required three-panel view for one wafer, sharing coordinate system / size:
+        Pre-Test (old_label)   green=pass, red=fail
+        Post-Test (label)      green=pass, red=fail
+        Difference             green=stays pass, red=pre-existing fail, orange=NEW fail
+    Only real dies are drawn; missing dies stay outside the wafer.
+    """
+    rows = wafer_df["die_row"].values
+    cols = wafer_df["die_col"].values
+    old = wafer_df["old_label"].values
+    lab = wafer_df["label"].values
+    xlim, ylim, s = _panel_geometry(rows, cols)
+
+    fig, axes = plt.subplots(1, 3, figsize=(16.5, 6))
+
+    pre = np.where(old == 1, C_FAIL, C_PASS)
+    _wafer_panel(axes[0], cols, rows, pre, "Pre-Test (old_label)", xlim, ylim, s)
+
+    post = np.where(lab == 1, C_FAIL, C_PASS)
+    _wafer_panel(axes[1], cols, rows, post, "Post-Test (label)", xlim, ylim, s)
+
+    diff = np.full(len(rows), C_PASS, dtype=object)
+    diff[old == 1] = C_FAIL
+    new_fail = (old == 0) & (lab == 1)
+    diff[new_fail] = C_NEW
+    _wafer_panel(axes[2], cols, rows, diff, "Difference (New Fails Highlighted)", xlim, ylim, s)
+
+    from matplotlib.patches import Patch
+    axes[2].legend(handles=[
+        Patch(color=C_PASS, label="Passing"),
+        Patch(color=C_FAIL, label="Pre-existing fail"),
+        Patch(color=C_NEW, label=f"NEW failure ({int(new_fail.sum())})"),
+    ], loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=3, frameon=False, fontsize=9)
+
+    fig.suptitle(title, fontsize=14, fontweight="700")
+    fig.tight_layout(rect=[0, 0.03, 1, 0.96])
+    save_fig(fig, path)
+
+
+def plot_wafer_prediction_diff(wafer_df, pred_col, title, path):
+    """
+    Prediction-aware companion view (proves the model predicts the orange dies):
+        Actual New Failures | Predicted New Failures | Prediction Outcome (TP/FN/FP)
+    Evaluated on eligible dies (old_label==0); pre-test fails shown grey.
+    """
+    rows = wafer_df["die_row"].values
+    cols = wafer_df["die_col"].values
+    old = wafer_df["old_label"].values
+    lab = wafer_df["label"].values
+    pred = wafer_df[pred_col].values
+    xlim, ylim, s = _panel_geometry(rows, cols)
+    elig = old == 0
+
+    fig, axes = plt.subplots(1, 3, figsize=(16.5, 6))
+
+    a_col = np.where(old == 1, C_KNOWN, np.where((old == 0) & (lab == 1), C_NEW, C_TN))
+    _wafer_panel(axes[0], cols, rows, a_col, "Actual New Failures", xlim, ylim, s)
+
+    p_col = np.where(old == 1, C_KNOWN, np.where((old == 0) & (pred == 1), C_NEW, C_TN))
+    _wafer_panel(axes[1], cols, rows, p_col, "Predicted New Failures", xlim, ylim, s)
+
+    outcome = np.full(len(rows), C_TN, dtype=object)
+    outcome[old == 1] = C_KNOWN
+    tp = elig & (lab == 1) & (pred == 1)
+    fn = elig & (lab == 1) & (pred == 0)
+    fp = elig & (lab == 0) & (pred == 1)
+    outcome[tp] = C_NEW
+    outcome[fn] = C_MISS
+    outcome[fp] = C_FP
+    _wafer_panel(axes[2], cols, rows, outcome, "Prediction Outcome", xlim, ylim, s)
+
+    from matplotlib.patches import Patch
+    axes[2].legend(handles=[
+        Patch(color=C_NEW, label=f"TP correct ({int(tp.sum())})"),
+        Patch(color=C_MISS, label=f"FN missed ({int(fn.sum())})"),
+        Patch(color=C_FP, label=f"FP false alarm ({int(fp.sum())})"),
+        Patch(color=C_TN, label="TN"),
+    ], loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=4, frameon=False, fontsize=8.5)
+
+    fig.suptitle(title, fontsize=14, fontweight="700")
+    fig.tight_layout(rect=[0, 0.03, 1, 0.96])
+    save_fig(fig, path)
+
+
 def plot_wafer_map(wafer_df, prob_col, title, path):
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 

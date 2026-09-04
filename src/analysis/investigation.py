@@ -1,15 +1,16 @@
 """
-Feature 5: Engineer Root-Cause & Investigation Engine.
+Feature 5: Engineer Investigation & Triage Engine.
 
 Ranks eligible dies by an investigation-priority score that fuses five real signals:
     - predicted risk           Model B failure probability
     - information gain         how much block-level data changed the verdict (|pb - pa|)
     - block-level signature    sub-die anomaly score (block_anomaly_score feature)
     - spatial anomaly          whether the die sits in a detected high-risk zone
-    - local attribution        magnitude of the strongest SHAP-style feature driver
+    - local attribution        magnitude of the strongest occlusion-based feature driver
 
 Every field on every produced die comes from actually computed model outputs / features,
-so the "TOP DIES TO INVESTIGATE" evidence is traceable, not narrative filler.
+so the "TOP DIES TO INVESTIGATE" evidence is traceable, not narrative filler. These are
+predictive clues / candidate process signatures, not proven physical failure causes.
 """
 import numpy as np
 import pandas as pd

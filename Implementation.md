@@ -2,7 +2,80 @@
 
 ## Status: COMPLETE
 
-Pipeline ran successfully end-to-end. All outputs generated and verified.
+Pipeline ran successfully end-to-end. All outputs generated and verified. This document
+records the **actual** implemented architecture (verified by reading the code), not claims.
+
+## Takeover audit (what exists on disk)
+
+Verified present and consistent: `data/LSWMD.pkl`, `input/{train,test,validation}.csv`
+(173,099 / 39,351 / 39,351 rows), trained `models/{model_a,model_b,block_pca}.pkl`, and a full
+`outputs/` tree (metrics, predictions, figures, analysis, dashboard, reports). No data blocker.
+
+**Verified facts (not assumed):**
+- Model A feature columns (`outputs/cache/model_a_cols.json`) contain **no** `block_*` features;
+  Model B adds `block_*` stats + `block_pca_*`. Same classifier/hyperparameters for both.
+- Spatial features are built from `old_label` only (`src/spatial_features.py` reads `old_label`,
+  never `label`).
+- Target = new failures on eligible dies (`old_label == 0`); pre-test fails excluded from
+  train/score but retained as spatial context.
+- Threshold tuned on OOF CV predictions (`src/models.py::train_with_cv`), not on test labels.
+- GroupKFold by `wafer_id`; IncrementalPCA fit on train-eligible only.
+
+## Analysis package (`src/analysis/`)
+- `feature_cache.py` — rebuilds Model A/B matrices from saved block PCA (no retrain); caches to
+  `outputs/cache/`.
+- `local_explain.py` — per-die model-based single-feature occlusion attribution (exact, not `shap`).
+- `info_gain.py` — Feature 2: per-die A-vs-B categorisation (CONFIRMED / HIDDEN / DISAGREEMENT /
+  REDUNDANT / LOW risk) + summary. **HIDDEN_RISK criterion: pₐ < tₐ and p_b ≥ t_b.**
+- `risk_zones.py` — Feature 4: 8-connectivity zones (min size 2) + pattern classification.
+- `investigation.py` — Feature 5: priority = 0.40·risk + 0.20·info-gain + 0.20·block-anomaly +
+  0.20·zone-severity; evidence generated from real values.
+- `focal_ablation.py` — Feature 3: focal sample weighting `(1-p_t)^gamma`, wafer-grouped CV,
+  adopted only if it beats baseline (it did not).
+- `eval_advanced.py` — decision-support: operating-point tables, business-cost curve,
+  wafer-level bootstrap CIs, calibration (Brier/ECE), matched operating-point A-vs-B.
+
+## Decision-support evaluation (added in takeover)
+`scripts/run_advanced_eval.py` reads saved predictions only and writes operating-point CSVs,
+`business_cost.csv`, `bootstrap_ci.json`, `calibration.csv`, `common_operating_points.csv`,
+four figures, and `outputs/reports/advanced_eval.md`. Key: **wafer-level bootstrap** gives the
+A→B AUC-PR gain a 95% CI of [+0.029, +0.048] with P(gain>0)=100% (F1 delta straddles 0, stated
+honestly). Local explanations are labelled **single-feature occlusion attribution**, not SHAP
+values; spatial patterns are **candidate process signatures**, not proven physical causes.
+
+## Strict per-fold PCA ablation (added in takeover)
+`scripts/strict_pca_ablation.py` re-runs Model-B wafer-grouped CV fitting IncrementalPCA
+**inside each fold** (train-eligible only) vs the production pre-fit PCA, and reports the OOF
+AUC-PR gap (`outputs/analysis/strict_pca_ablation.json`). The production pre-fit PCA uses no
+labels, so it is not target leakage; this ablation confirms it. **Result: pooled OOF AUC-PR
+0.5019 (pre-fit) vs 0.5011 (strict per-fold), difference −0.0007** — negligible, and strict is
+if anything marginally lower (fold diffs −0.010 / +0.005 / +0.012 / −0.003 / +0.001, symmetric
+around zero). The per-fold reconstruction is exact: the `std` OOF values reproduce the original
+Model-B CV folds. So fitting the unsupervised block PCA once on all training-eligible dies does
+not inflate results.
+
+## Three-panel wafer visualization (added in takeover)
+`src/visualization.py::plot_wafer_triptych` (Pre-Test / Post-Test / Difference-new-fails) and
+`plot_wafer_prediction_diff` (Actual / Predicted / TP-FN-FP outcome). All panels share
+coordinate system, aspect ratio, orientation and die size; only real dies are drawn. Generated
+by `scripts/make_wafer_views.py`, wired into `run_pipeline.py` STAGE 7, and embedded in the
+dashboard (`scripts/build_dashboard.py`).
+
+## New analysis outputs (added in takeover)
+- `outputs/analysis/hidden_risk.csv` — all HIDDEN_RISK dies with pₐ, p_b, delta, actual label,
+  `true_new_failure` flag (202 dies; 54 true new failures).
+- `outputs/analysis/investigation_priority.csv` — full ranked investigation list.
+- `outputs/figures/wafer_views/*.png` — three-panel + prediction wafer figures.
+
+## Leakage safeguards (audited)
+| Safeguard | Where |
+|---|---|
+| Spatial features from `old_label` only | `src/spatial_features.py` |
+| IncrementalPCA fit on train-eligible only | `src/block_features.py`, `run_pipeline.py` |
+| GroupKFold by `wafer_id` | `src/models.py::train_with_cv` |
+| Threshold from OOF CV only | `src/models.py`, `src/evaluation.py` |
+| Metrics on `old_label==0` only | `run_pipeline.py`, `src/analysis/*` |
+| Sample weights from train-eligible only | `src/preprocessing.py` |
 
 ## Architecture
 
